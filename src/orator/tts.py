@@ -12,6 +12,7 @@ from .models.s3gen import S3GEN_SR, S3Gen
 from .models.tokenizers import EnTokenizer
 from .models.voice_encoder import VoiceEncoder
 from .models.t3.modules.cond_enc import T3Cond
+from .models.bigvgan.bigvgan import BigVGAN
 
 
 REPO_ID = "ResembleAI/Orator"
@@ -78,6 +79,7 @@ class OratorTTS:
         s3gen: S3Gen,
         ve: VoiceEncoder,
         tokenizer: EnTokenizer,
+        bigvgan: BigVGAN,
         device: str,
         conds: Conditionals = None,
     ):
@@ -86,6 +88,7 @@ class OratorTTS:
         self.s3gen = s3gen
         self.ve = ve
         self.tokenizer = tokenizer
+        self.bigvgan = bigvgan
         self.device = device
         self.conds = conds
 
@@ -115,15 +118,21 @@ class OratorTTS:
             str(ckpt_dir / "tokenizer.json")
         )
 
+        bigvgan = BigVGAN()
+        bigvgan.load_state_dict(
+            torch.load(ckpt_dir / "bigvgan.pt")
+        )
+        bigvgan.to(device).eval()
+
         conds = None
         if (builtin_voice := ckpt_dir / "conds.pt").exists():
             conds = Conditionals.load(builtin_voice).to(device)
 
-        return cls(t3, s3gen, ve, tokenizer, device, conds=conds)
+        return cls(t3, s3gen, ve, tokenizer, bigvgan, device, conds=conds)
 
     @classmethod
     def from_pretrained(cls, device) -> 'OratorTTS':
-        for fpath in ["ve.pt", "t3.pt", "s3gen.pt", "tokenizer.json", "conds.pt"]:
+        for fpath in ["ve.pt", "t3.pt", "s3gen.pt", "tokenizer.json", "bigvgan.pt", "conds.pt"]:
             local_path = hf_hub_download(repo_id=REPO_ID, filename=fpath)
 
         return cls.from_local(Path(local_path).parent, device)
@@ -197,9 +206,11 @@ class OratorTTS:
 
             speech_tokens = change_pace(speech_tokens, pace=pace)
 
-            wav, _ = self.s3gen.inference(
+            mels = self.s3gen.inference(
                 speech_tokens=speech_tokens,
                 ref_dict=self.conds.gen,
+                return_mels=True,
             )
+            wav = self.bigvgan(mels).view(-1)
 
         return wav.detach().cpu()
