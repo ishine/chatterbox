@@ -1,19 +1,6 @@
-
-<img width="1200" alt="cb-big2" src="https://github.com/user-attachments/assets/bd8c5f03-e91d-4ee5-b680-57355da204d1" />
-
-# Chatterbox TTS
-
-[![Alt Text](https://img.shields.io/badge/listen-demo_samples-blue)](https://resemble-ai.github.io/chatterbox_demopage/)
-[![Alt Text](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/ResembleAI/Chatterbox)
-[![Alt Text](https://static-public.podonos.com/badges/insight-on-pdns-sm-dark.svg)](https://podonos.com/resembleai/chatterbox)
-
-_Made with ♥️ by <img width="100" alt="resemble-logo-horizontal" src="https://github.com/user-attachments/assets/35cf756b-3506-4943-9c72-c05ddfa4e525" />_
-
-We're excited to introduce Chatterbox, [Resemble AI's](https://resemble.ai) first production-grade open source TTS model. Licensed under MIT, Chatterbox has been benchmarked against leading closed-source systems like ElevenLabs, and is consistently preferred in side-by-side evaluations.
-
-Whether you're working on memes, videos, games, or AI agents, Chatterbox brings your content to life. It's also the first open source TTS model to support **emotion exaggeration control**, a powerful feature that makes your voices stand out. Try it now on our [Hugging Face Gradio app.](https://huggingface.co/spaces/ResembleAI/Chatterbox)
-
-If you like the model but need to scale or tune it for higher accuracy, check out our competitively priced TTS service (<a href="https://resemble.ai">link</a>). It delivers reliable performance with ultra-low latency of sub 200ms—ideal for production use in agents, applications, or interactive media.
+# Chatterbox TTS Streaming
+Chatterbox is an open source TTS model. Licensed under MIT, Chatterbox has been benchmarked against leading closed-source systems like ElevenLabs, and is consistently preferred in side-by-side evaluations.
+Whether you're working on memes, videos, games, or AI agents, Chatterbox brings your content to life. It's also the first open source TTS model to support **emotion exaggeration control**, a powerful feature that makes your voices stand out. This fork adds a streaming implementation that achieves a realtime factor of 0.499 (target < 1) on a 4090 gpu and a latency to first chunk of around 0.472s
 
 # Key Details
 - SoTA zeroshot TTS
@@ -23,41 +10,124 @@ If you like the model but need to scale or tune it for higher accuracy, check ou
 - Trained on 0.5M hours of cleaned data
 - Watermarked outputs
 - Easy voice conversion script
-- [Outperforms ElevenLabs](https://podonos.com/resembleai/chatterbox)
+- **Real-time streaming generation**
+- [Outperforms ElevenLabs]
 
 # Tips
 - **General Use (TTS and Voice Agents):**
-  - The default settings (`exaggeration=0.5`, `cfg_weight=0.5`) work well for most prompts.
-  - If the reference speaker has a fast speaking style, lowering `cfg_weight` to around `0.3` can improve pacing.
-
+- The default settings (`exaggeration=0.5`, `cfg_weight=0.5`) work well for most prompts.
+- If the reference speaker has a fast speaking style, lowering `cfg_weight` to around `0.3` can improve pacing.
 - **Expressive or Dramatic Speech:**
-  - Try lower `cfg_weight` values (e.g. `~0.3`) and increase `exaggeration` to around `0.7` or higher.
-  - Higher `exaggeration` tends to speed up speech; reducing `cfg_weight` helps compensate with slower, more deliberate pacing.
-
+- Try lower `cfg_weight` values (e.g. `~0.3`) and increase `exaggeration` to around `0.7` or higher.
+- Higher `exaggeration` tends to speed up speech; reducing `cfg_weight` helps compensate with slower, more deliberate pacing.
 
 # Installation
 ```
-pip install chatterbox-tts
+python3.10 -m venv .venv
+source .venv/bin/activate
+pip install chatterbox-streaming
 ```
 
+## Build for development
+```
+git clone https://github.com/davidbrowne17/chatterbox-streaming.git
+pip install -e .
+```
 
 # Usage
+
+## Basic TTS Generation
 ```python
 import torchaudio as ta
 from chatterbox.tts import ChatterboxTTS
 
 model = ChatterboxTTS.from_pretrained(device="cuda")
-
 text = "Ezreal and Jinx teamed up with Ahri, Yasuo, and Teemo to take down the enemy's Nexus in an epic late-game pentakill."
 wav = model.generate(text)
 ta.save("test-1.wav", wav, model.sr)
 
 # If you want to synthesize with a different voice, specify the audio prompt
-AUDIO_PROMPT_PATH="YOUR_FILE.wav"
+AUDIO_PROMPT_PATH = "YOUR_FILE.wav"
 wav = model.generate(text, audio_prompt_path=AUDIO_PROMPT_PATH)
 ta.save("test-2.wav", wav, model.sr)
 ```
-See `example_tts.py` for more examples.
+
+## Streaming TTS Generation
+For real-time applications where you want to start playing audio as soon as it's available:
+
+```python
+import torchaudio as ta
+import torch
+from chatterbox.tts import ChatterboxTTS
+
+model = ChatterboxTTS.from_pretrained(device="cuda")
+text = "Welcome to the world of streaming text-to-speech! This audio will be generated and played in real-time chunks."
+
+# Basic streaming
+audio_chunks = []
+for audio_chunk, metrics in model.generate_stream(text):
+    audio_chunks.append(audio_chunk)
+    # You can play audio_chunk immediately here for real-time playback
+    print(f"Generated chunk {metrics.chunk_count}, RTF: {metrics.rtf:.3f}" if metrics.rtf else f"Chunk {metrics.chunk_count}")
+
+# Combine all chunks into final audio
+final_audio = torch.cat(audio_chunks, dim=-1)
+ta.save("streaming_output.wav", final_audio, model.sr)
+```
+
+## Streaming with Voice Cloning
+```python
+import torchaudio as ta
+import torch
+from chatterbox.tts import ChatterboxTTS
+
+model = ChatterboxTTS.from_pretrained(device="cuda")
+text = "This streaming synthesis will use a custom voice from the reference audio file."
+AUDIO_PROMPT_PATH = "reference_voice.wav"
+
+audio_chunks = []
+for audio_chunk, metrics in model.generate_stream(
+    text, 
+    audio_prompt_path=AUDIO_PROMPT_PATH,
+    exaggeration=0.7,
+    cfg_weight=0.3,
+    chunk_size=25  # Smaller chunks for lower latency
+):
+    audio_chunks.append(audio_chunk)
+    
+    # Real-time metrics available
+    if metrics.latency_to_first_chunk:
+        print(f"First chunk latency: {metrics.latency_to_first_chunk:.3f}s")
+
+# Save the complete streaming output
+final_audio = torch.cat(audio_chunks, dim=-1)
+ta.save("streaming_voice_clone.wav", final_audio, model.sr)
+```
+
+## Streaming Parameters
+- `audio_prompt_path`: Reference audio path for voice cloning
+- `chunk_size`: Number of speech tokens per chunk (default: 50). Smaller values = lower latency but more overhead
+- `print_metrics`: Enable automatic printing of latency and RTF metrics (default: True)
+- `exaggeration`: Emotion intensity control (0.0-1.0+)
+- `cfg_weight`: Classifier-free guidance weight (0.0-1.0)
+- `temperature`: Sampling randomness (0.1-1.0)
+
+See `example_tts_stream.py` for more examples.
+
+## Example metrics
+Here are the example metrics for streaming latency on a 4090
+- Latency to first chunk: 0.472s
+- Received chunk 1, shape: torch.Size([1, 24000]), duration: 1.000s
+- Audio playback started!
+- Received chunk 2, shape: torch.Size([1, 24000]), duration: 1.000s
+- Received chunk 3, shape: torch.Size([1, 24000]), duration: 1.000s
+- Received chunk 4, shape: torch.Size([1, 24000]), duration: 1.000s
+- Received chunk 5, shape: torch.Size([1, 24000]), duration: 1.000s
+- Received chunk 6, shape: torch.Size([1, 20160]), duration: 0.840s
+- Total generation time: 2.915s
+- Total audio duration: 5.840s
+- RTF (Real-Time Factor): 0.499 (target < 1)
+- Total chunks yielded: 6
 
 # Acknowledgements
 - [Cosyvoice](https://github.com/FunAudioLLM/CosyVoice)
@@ -67,8 +137,13 @@ See `example_tts.py` for more examples.
 - [S3Tokenizer](https://github.com/xingchensong/S3Tokenizer)
 
 # Built-in PerTh Watermarking for Responsible AI
-
 Every audio file generated by Chatterbox includes [Resemble AI's Perth (Perceptual Threshold) Watermarker](https://github.com/resemble-ai/perth) - imperceptible neural watermarks that survive MP3 compression, audio editing, and common manipulations while maintaining nearly 100% detection accuracy.
 
 # Disclaimer
 Don't use this model to do bad things. Prompts are sourced from freely available data on the internet.
+
+## Streaming Implementation Author
+David Browne
+
+## Support me
+Support this project on Ko-fi: https://ko-fi.com/davidbrowne17

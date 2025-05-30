@@ -1,12 +1,12 @@
 [project]
-name = "chatterbox-tts"
-version = "0.1.1"
-description = "Chatterbox: Open Source TTS and Voice Conversion by Resemble AI"
+name = "chatterbox-streaming"
+version = "0.1.0"
+description = "Chatterbox Streaming: Open Source TTS and Voice Conversion"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
-    {name = "resemble-ai", email = "engineering@resemble.ai"}
+    {name = "davidbrowne17", email = "davidbrowne17@gmail.com"}
 ]
 dependencies = [
     "numpy~=1.26.0",
@@ -20,11 +20,12 @@ dependencies = [
     "resemble-perth==1.0.1",
     "omegaconf==2.3.0",
     "conformer==0.3.2",
+    "sounddevice==0.5.2"
 ]
 
 [project.urls]
-Homepage = "https://github.com/resemble-ai/chatterbox"
-Repository = "https://github.com/resemble-ai/chatterbox"
+Homepage = "https://github.com/davidbrowne17/chatterbox-streaming"
+Repository = "https://github.com/davidbrowne17/chatterbox-streaming"
 
 [build-system]
 requires = ["setuptools>=61.0"]
